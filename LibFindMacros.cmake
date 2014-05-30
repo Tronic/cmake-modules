@@ -1,35 +1,20 @@
-# Version 2.0
+# Version 2.0+
 # Public Domain, originally written by Lasse Kärkkäinen <tronic>
 # Maintained at https://github.com/Tronic/cmake-modules
 # Please send your improvements as pull requests on Github.
-
-# Version (none) - originally published on 2009-10-08 on Kitware Public Wiki
-# Version 1.0 - update on Kitware Public Wiki
-# - Added a version number and a fancy header with license and authorship data,
-#   no other changes.
-# Version 2.0 - released 2014-05-30
-# - Development moved to https://github.com/Tronic/cmake-modules
-# - Remains compatible with older versions (drop-in replacement)
-# - Removed backwards compatibility with CMake older than 2.8
-# - Using function() rather than macro() where applicable
-# - Major code cleanup for better readability and more flexibility
-# - Added package version checks to libfind_process
-# - If a library fails to detect, none of its config options are hidden
-# - Added libfind_version_header for easy parsing of version.h
-# - Made pkg-config search QUIET
-# - Heavily improved error/warning messages on libfind_process
 
 # Works the same as find_package, but forwards the "REQUIRED" argument used for
 # the current package and always uses the "QUIET" flag. For this to work, the
 # first parameter must be the prefix of the current package, then the prefix of
 # the new package etc, which are passed to find_package.
-macro (libfind_package PREFIX)
-  set (LIBFIND_PACKAGE_ARGS ${ARGN} QUIET)
+macro (libfind_package PREFIX PKG)
+  set (LIBFIND_PACKAGE_ARGS ${PKG} ${ARGN} QUIET)
   if (${PREFIX}_FIND_REQUIRED)
     set (LIBFIND_PACKAGE_ARGS ${LIBFIND_PACKAGE_ARGS} REQUIRED)
   endif()
   find_package(${LIBFIND_PACKAGE_ARGS})
   unset(LIBFIND_PACKAGE_ARGS)
+  list(APPEND ${PREFIX}_DEPENDENCIES ${PKG})
 endmacro (libfind_package)
 
 # A simple wrapper to make pkg-config searches a bit easier.
@@ -105,13 +90,49 @@ function (libfind_process PREFIX)
   set(findver "${${PREFIX}_FIND_VERSION}")
   set(version "${${PREFIX}_VERSION}")
 
-  # Make sure that these don't already exist before we start making lists
+  # Lists of config option names (all, includes, libs)
   unset(configopts)
+  set(includeopts ${${PREFIX}_PROCESS_INCLUDES})
+  set(libraryopts ${${PREFIX}_PROCESS_LIBS})
+
+  # Process deps to add to 
+  foreach (i ${PREFIX} ${${PREFIX}_DEPENDENCIES})
+    if (DEFINED ${i}_INCLUDE_OPTS OR DEFINED ${i}_LIBRARY_OPTS)
+      # The package seems to export option lists that we can use, woohoo!
+      list(APPEND includeopts ${${i}_INCLUDE_OPTS})
+      list(APPEND libraryopts ${${i}_LIBRARY_OPTS})
+    else()
+      # If plural forms don't exist or they equal singular forms
+      if ((NOT DEFINED ${i}_INCLUDE_DIRS AND NOT DEFINED ${i}_LIBRARIES) OR
+          ({i}_INCLUDE_DIR STREQUAL ${i}_INCLUDE_DIRS AND ${i}_LIBRARY STREQUAL ${i}_LIBRARIES))
+        # Singular forms can be used
+        if (DEFINED ${i}_INCLUDE_DIR)
+          list(APPEND includeopts ${i}_INCLUDE_DIR)
+        endif()
+        if (DEFINED ${i}_LIBRARY)
+          list(APPEND libraryopts ${i}_LIBRARY)
+        endif()
+      else()
+        # Oh no, we don't know the option names
+        message(FATAL_ERROR "We couldn't determine config variable names for ${i} includes and libs. Aieeh!")
+      endif()
+    endif()
+  endforeach()
+  
+  if (includeopts)
+    list(REMOVE_DUPLICATES includeopts)
+  endif()
+  
+  if (libraryopts)
+    list(REMOVE_DUPLICATES libraryopts)
+  endif()
+
+  # Include/library names separated by spaces (notice: not CMake lists)
   unset(includes)
   unset(libs)
-  
+
   # Process all includes and set found false if any are missing
-  foreach (i ${${PREFIX}_PROCESS_INCLUDES})
+  foreach (i ${includeopts})
     list(APPEND configopts ${i})
     if (NOT "${${i}}" STREQUAL "${i}-NOTFOUND")
       set(includes ${includes} ${${i}})
@@ -122,7 +143,7 @@ function (libfind_process PREFIX)
   endforeach()
 
   # Process all libraries and set found false if any are missing
-  foreach (i ${${PREFIX}_PROCESS_LIBS})
+  foreach (i ${libraryopts})
     list(APPEND configopts ${i})
     if (NOT "${${i}}" STREQUAL "${i}-NOTFOUND")
       set(libs ${libs} ${${i}})
@@ -147,6 +168,8 @@ function (libfind_process PREFIX)
     foreach (i ${configopts})
       mark_as_advanced(${i})
     endforeach()
+    set (${PREFIX}_INCLUDE_OPTS ${includeopts} PARENT_SCOPE)
+    set (${PREFIX}_LIBRARY_OPTS ${libraryopts} PARENT_SCOPE)
     set (${PREFIX}_INCLUDE_DIRS ${includes} PARENT_SCOPE)
     set (${PREFIX}_LIBRARIES ${libs} PARENT_SCOPE)
     set (${PREFIX}_FOUND TRUE PARENT_SCOPE)
