@@ -1,21 +1,20 @@
-# Version 2.0+
+# Version 2.1
 # Public Domain, originally written by Lasse Kärkkäinen <tronic>
 # Maintained at https://github.com/Tronic/cmake-modules
 # Please send your improvements as pull requests on Github.
 
-# Works the same as find_package, but forwards the "REQUIRED" argument used for
-# the current package and always uses the "QUIET" flag. For this to work, the
-# first parameter must be the prefix of the current package, then the prefix of
-# the new package etc, which are passed to find_package.
+# Find another package and make it a dependency of the current package.
+# This also automatically forwards the "REQUIRED" argument.
+# Usage: libfind_package(<prefix> <another package> [extra args to find_package])
 macro (libfind_package PREFIX PKG)
-  set (LIBFIND_PACKAGE_ARGS ${PKG} ${ARGN} QUIET)
+  set(${PREFIX}_args ${PKG} ${ARGN})
   if (${PREFIX}_FIND_REQUIRED)
-    set (LIBFIND_PACKAGE_ARGS ${LIBFIND_PACKAGE_ARGS} REQUIRED)
+    set(${PREFIX}_args ${${PREFIX}_args} REQUIRED)
   endif()
-  find_package(${LIBFIND_PACKAGE_ARGS})
-  unset(LIBFIND_PACKAGE_ARGS)
-  list(APPEND ${PREFIX}_DEPENDENCIES ${PKG})
-endmacro (libfind_package)
+  find_package(${${PREFIX}_args})
+  set(${PREFIX}_DEPENDENCIES ${${PREFIX}_DEPENDENCIES};${PKG} PARENT_SCOPE)
+  unset(${PREFIX}_args)
+endmacro()
 
 # A simple wrapper to make pkg-config searches a bit easier.
 # Works the same as CMake's internal pkg_check_modules but is always quiet.
@@ -25,6 +24,35 @@ macro (libfind_pkg_check_modules)
     pkg_check_modules(${ARGN} QUIET)
   endif()
 endmacro()
+
+# Avoid useless copy&pasta by doing what most simple libraries do anyway:
+# pkg-config, find headers, find library.
+# Usage: libfind_pkg_detect(<prefix> <pkg-config args> FIND_PATH <name> [other args] FIND_LIBRARY <name> [other args])
+# E.g. libfind_pkg_detect(SDL2 sdl2 FIND_PATH SDL.h PATH_SUFFIXES SDL2 FIND_LIBRARY SDL2)
+function (libfind_pkg_detect PREFIX)
+  # Parse arguments
+  set(argname pkgargs)
+  foreach (i ${ARGN})
+    if ("${i}" STREQUAL "FIND_PATH")
+      set(argname pathargs)
+    elseif ("${i}" STREQUAL "FIND_LIBRARY")
+      set(argname libraryargs)
+    else()
+      set(${argname} ${${argname}} ${i})
+    endif()
+  endforeach()
+  if (NOT pkgargs)
+    message(FATAL_ERROR "libfind_pkg_detect requires at least a pkg_config package name to be passed.")
+  endif()
+  # Find library
+  libfind_pkg_check_modules(${PREFIX}_PKGCONF ${pkgargs})
+  if (pathargs)
+    find_path(${PREFIX}_INCLUDE_DIR NAMES ${pathargs} HINTS ${${PREFIX}_PKGCONF_INCLUDE_DIRS})
+  endif()
+  if (libraryargs)
+    find_library(${PREFIX}_SDL_LIBRARY NAMES ${libraryargs} HINTS ${${PREFIX}_PKGCONF_LIBRARY_DIRS})
+  endif()
+endfunction()
 
 # Extracts a version #define from a version.h file, output stored to <PREFIX>_VERSION.
 # Usage: libfind_version_header(Foobar foobar/version.h FOOBAR_VERSION_STR)
@@ -127,6 +155,11 @@ function (libfind_process PREFIX)
     list(REMOVE_DUPLICATES libraryopts)
   endif()
 
+  string(REGEX REPLACE ".*[ ;]([^ ;]*(_INCLUDE_DIRS|_LIBRARIES))" "\\1" tmp "${includeopts} ${libraryopts}")
+  if (NOT tmp STREQUAL "${includeopts} ${libraryopts}")
+    message(AUTHOR_WARNING "Plural form ${tmp} found in config options of ${PREFIX}. This works as before but is now deprecated. Please only use singular forms INCLUDE_DIR and LIBRARY, and update your find scripts for LibFindMacros > 2.0 automatic dependency system (most often you can simply remove the PROCESS variables entirely).")
+  endif()
+
   # Include/library names separated by spaces (notice: not CMake lists)
   unset(includes)
   unset(libs)
@@ -135,7 +168,7 @@ function (libfind_process PREFIX)
   foreach (i ${includeopts})
     list(APPEND configopts ${i})
     if (NOT "${${i}}" STREQUAL "${i}-NOTFOUND")
-      set(includes ${includes} ${${i}})
+      list(APPEND includes "${${i}}")
     else()
       set(found FALSE)
       set(missing_headers TRUE)
@@ -146,7 +179,7 @@ function (libfind_process PREFIX)
   foreach (i ${libraryopts})
     list(APPEND configopts ${i})
     if (NOT "${${i}}" STREQUAL "${i}-NOTFOUND")
-      set(libs ${libs} ${${i}})
+      list(APPEND libs "${${i}}")
     else()
       set (found FALSE)
     endif()
@@ -155,8 +188,7 @@ function (libfind_process PREFIX)
   # Version checks
   if (found AND findver)
     if (NOT version)
-      message (AUTHOR_WARNING "Find${PREFIX}.cmake does not provide version information. Either fix the module or remove any find_package() version requirements.")
-      set(found FALSE)
+      message(WARNING "The find module for ${PREFIX} does not provide version information, so we'll just assume that it is OK. Please fix the module or remove package version requirements to get rid of this warning.")
     elseif (version VERSION_LESS findver OR (exactver AND NOT version VERSION_EQUAL findver))
       set(found FALSE)
       set(version_unsuitable TRUE)
@@ -175,6 +207,13 @@ function (libfind_process PREFIX)
     set (${PREFIX}_FOUND TRUE PARENT_SCOPE)
     if (NOT quiet)
       message(STATUS "Found ${PREFIX} ${${PREFIX}_VERSION}")
+      if (LIBFIND_DEBUG)
+        message(STATUS "  ${PREFIX}_INCLUDE_OPTS=${${PREFIX}_INCLUDE_OPTS}")
+        message(STATUS "  ${PREFIX}_LIBRARY_OPTS=${${PREFIX}_LIBRARY_OPTS}")
+        message(STATUS "  ${PREFIX}_INCLUDE_DIRS=${includes}")
+        message(STATUS "  ${PREFIX}_LIBRARIES=${libs}")
+        message(STATUS "  ${PREFIX}_DEPENDENCIES=${${PREFIX}_DEPENDENCIES}")
+      endif()
     endif()
     return()    
   endif()
