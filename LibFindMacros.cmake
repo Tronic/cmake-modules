@@ -1,4 +1,4 @@
-# Version 2.0 (2013-04-12)
+# Version 2.0
 # Public Domain, originally written by Lasse Kärkkäinen <tronic>
 # Maintained at https://github.com/Tronic/cmake-modules
 # Please send your improvements as pull requests on Github.
