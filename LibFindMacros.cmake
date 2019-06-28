@@ -52,6 +52,10 @@ function (libfind_pkg_detect PREFIX)
   if (libraryargs)
     find_library(${PREFIX}_LIBRARY NAMES ${libraryargs} HINTS ${${PREFIX}_PKGCONF_LIBRARY_DIRS})
   endif()
+  # Read pkg-config version
+  if (${PREFIX}_PKGCONF_VERSION)
+    set(${PREFIX}_VERSION ${${PREFIX}_PKGCONF_VERSION} PARENT_SCOPE)
+  endif()
 endfunction()
 
 # Extracts a version #define from a version.h file, output stored to <PREFIX>_VERSION.
