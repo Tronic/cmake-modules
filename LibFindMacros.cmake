@@ -136,7 +136,7 @@ function (libfind_process PREFIX)
     else()
       # If plural forms don't exist or they equal singular forms
       if ((NOT DEFINED ${i}_INCLUDE_DIRS AND NOT DEFINED ${i}_LIBRARIES) OR
-          ({i}_INCLUDE_DIR STREQUAL ${i}_INCLUDE_DIRS AND ${i}_LIBRARY STREQUAL ${i}_LIBRARIES))
+          (${i}_INCLUDE_DIR STREQUAL ${i}_INCLUDE_DIRS AND ${i}_LIBRARY STREQUAL ${i}_LIBRARIES))
         # Singular forms can be used
         if (DEFINED ${i}_INCLUDE_DIR)
           list(APPEND includeopts ${i}_INCLUDE_DIR)
