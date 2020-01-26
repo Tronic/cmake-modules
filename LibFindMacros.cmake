@@ -1,4 +1,4 @@
-# Version 2.2
+# Version 2.3
 # Public Domain, originally written by Lasse Kärkkäinen <tronic>
 # Maintained at https://github.com/Tronic/cmake-modules
 # Please send your improvements as pull requests on Github.
@@ -127,7 +127,7 @@ function (libfind_process PREFIX)
   set(includeopts ${${PREFIX}_PROCESS_INCLUDES})
   set(libraryopts ${${PREFIX}_PROCESS_LIBS})
 
-  # Process deps to add to 
+  # Process deps to add to
   foreach (i ${PREFIX} ${${PREFIX}_DEPENDENCIES})
     if (DEFINED ${i}_INCLUDE_OPTS OR DEFINED ${i}_LIBRARY_OPTS)
       # The package seems to export option lists that we can use, woohoo!
@@ -150,11 +150,11 @@ function (libfind_process PREFIX)
       endif()
     endif()
   endforeach()
-  
+
   if (includeopts)
     list(REMOVE_DUPLICATES includeopts)
   endif()
-  
+
   if (libraryopts)
     list(REMOVE_DUPLICATES libraryopts)
   endif()
@@ -219,7 +219,7 @@ function (libfind_process PREFIX)
     set (${PREFIX}_INCLUDE_DIRS ${includes} PARENT_SCOPE)
     set (${PREFIX}_LIBRARIES ${libs} PARENT_SCOPE)
     set (${PREFIX}_FOUND TRUE PARENT_SCOPE)
-    return()    
+    return()
   endif()
 
   # Format messages for debug info and the type of error
@@ -267,4 +267,3 @@ function (libfind_process PREFIX)
     message(WARNING "WARNING: MISSING PACKAGE\n${msg} This package is NOT REQUIRED and you may ignore this warning but by doing so you may miss some functionality of ${CMAKE_PROJECT_NAME}. \n${vars}")
   endif()
 endfunction()
-
